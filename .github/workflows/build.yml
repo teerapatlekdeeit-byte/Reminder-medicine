@@ -1,9 +1,11 @@
+
 name: Build and deploy to GitHub Pages
 
 on:
   push:
     branches:
       - main
+
   workflow_dispatch:
 
 permissions:
@@ -12,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: github-pages
   cancel-in-progress: true
 
 jobs:
@@ -24,40 +26,61 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      # 1. Download repository
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Prepare website files
+      # 2. Check website
+      - name: Check website files
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
 
-          if [[ ! -f index.html ]]; then
-            echo "::error::index.html is missing!"
+          if [ ! -f index.html ]; then
+            echo "::error::index.html not found!"
             exit 1
           fi
 
+          echo "Website entry point found!"
+
+      # 3. Enable and configure GitHub Pages
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      # 4. Prepare website
+      - name: Build website
+        shell: bash
+        run: |
+          set -e
+
           mkdir -p _site
 
-          rsync -a --delete \
-            --exclude='/.git/' \
-            --exclude='/.github/' \
-            --exclude='/_site/' \
-            --exclude='/node_modules/' \
+          rsync -av --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='_site/' \
+            --exclude='node_modules/' \
             ./ _site/
 
           touch _site/.nojekyll
 
-          echo "Website files prepared successfully."
+          echo "Website build completed!"
 
-      - name: Upload website artifact
+      # 5. Upload website
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
+      # 6. Deploy website
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # 7. Show deployment result
+      - name: Deployment result
+        run: |
+          echo "GitHub Pages deployment completed!"
+          echo "Website: ${{ steps.deployment.outputs.page_url }}"
